@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "charliermarsh.ruff",
+    "ms-python.python",
+    "ms-python.mypy-type-checker",
+    "ms-python.vscode-pylance",
+    "redhat.vscode-yaml",
+    "ms-azuretools.vscode-docker",
+    "bierner.markdown-mermaid"
+  ]
+}

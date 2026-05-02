@@ -1,0 +1,127 @@
+# Sample e-commerce database schema for Eng2SQL static mode
+# This file is used when no live database connection is configured.
+# Edit this file to match your actual database structure.
+
+tables:
+
+  customers:
+    - name: id
+      type: INT
+      nullable: false
+      primary_key: true
+    - name: first_name
+      type: VARCHAR(100)
+      nullable: false
+    - name: last_name
+      type: VARCHAR(100)
+      nullable: false
+    - name: email
+      type: VARCHAR(200)
+      nullable: false
+    - name: phone
+      type: VARCHAR(20)
+      nullable: true
+    - name: created_at
+      type: DATETIME
+      nullable: false
+    - name: country
+      type: VARCHAR(50)
+      nullable: true
+
+  products:
+    - name: id
+      type: INT
+      nullable: false
+      primary_key: true
+    - name: name
+      type: VARCHAR(200)
+      nullable: false
+    - name: description
+      type: TEXT
+      nullable: true
+    - name: price
+      type: DECIMAL(10,2)
+      nullable: false
+    - name: stock_qty
+      type: INT
+      nullable: false
+      default: "0"
+    - name: category_id
+      type: INT
+      nullable: true
+    - name: created_at
+      type: DATETIME
+      nullable: false
+
+  categories:
+    - name: id
+      type: INT
+      nullable: false
+      primary_key: true
+    - name: name
+      type: VARCHAR(100)
+      nullable: false
+    - name: parent_id
+      type: INT
+      nullable: true
+
+  orders:
+    - name: id
+      type: INT
+      nullable: false
+      primary_key: true
+    - name: customer_id
+      type: INT
+      nullable: false
+    - name: status
+      type: ENUM('pending','processing','shipped','delivered','cancelled')
+      nullable: false
+      default: "'pending'"
+    - name: total_amount
+      type: DECIMAL(12,2)
+      nullable: false
+    - name: created_at
+      type: DATETIME
+      nullable: false
+    - name: shipped_at
+      type: DATETIME
+      nullable: true
+
+  order_items:
+    - name: id
+      type: INT
+      nullable: false
+      primary_key: true
+    - name: order_id
+      type: INT
+      nullable: false
+    - name: product_id
+      type: INT
+      nullable: false
+    - name: quantity
+      type: INT
+      nullable: false
+    - name: unit_price
+      type: DECIMAL(10,2)
+      nullable: false
+
+  reviews:
+    - name: id
+      type: INT
+      nullable: false
+      primary_key: true
+    - name: product_id
+      type: INT
+      nullable: false
+    - name: customer_id
+      type: INT
+      nullable: false
+    - name: rating
+      type: TINYINT
+      nullable: false
+    - name: comment
+      type: TEXT
+      nullable: true
+    - name: created_at
+      type: DATETIME
+      nullable: false

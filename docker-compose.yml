@@ -1,0 +1,48 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.2}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://gpt4ifx.icp.infineon.com}
+      - OPENAI_CERT_PATH=${OPENAI_CERT_PATH:-cert/ca-bundle.crt}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-500}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.1}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-eng2sql}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-eng2sql_db}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - STATIC_SCHEMA_PATH=config/database_config.yaml
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+      - ./cert:/app/cert:ro
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-eng2sql_db}
+      MYSQL_USER: ${DB_USER:-eng2sql}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

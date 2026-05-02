@@ -1,0 +1,305 @@
+name: Multi-Agent SDLC Pipeline
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Triggers
+# ──────────────────────────────────────────────────────────────────────────────
+on:
+  # Auto-trigger whenever an Epic definition file is added or changed
+  push:
+    branches: [main, develop]
+    paths:
+      - "docs/epics/EPIC-*.md"
+
+  # Allow manual run with optional force-restart
+  workflow_dispatch:
+    inputs:
+      start_phase:
+        description: "Start from phase number (1=epics, 2=stories, 3=arch, 4=sprints, 5=dev, 6=review, 7=tests, 8=tester, 9=deploy, 10=devops)"
+        required: false
+        default: "1"
+      dry_run:
+        description: "Dry run — print plan but do not write files"
+        type: boolean
+        required: false
+        default: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Permissions
+# ──────────────────────────────────────────────────────────────────────────────
+permissions:
+  contents: write   # needed to commit generated docs back to repo
+  packages: write   # needed for GHCR image publish (Phase 9)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Jobs
+# ──────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── Phase 1-4: Planning & Documentation (parallel-safe) ───────────────────
+  planning:
+    name: "Phases 1–4 · Planning & Documentation"
+    runs-on: ubuntu-latest
+    outputs:
+      epics_changed: ${{ steps.check.outputs.epics_changed }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pipeline dependencies
+        run: pip install openai httpx pyyaml
+
+      - name: Check which phases need running
+        id: check
+        run: python scripts/run_pipeline.py --check-only
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          PIPELINE_START_PHASE: ${{ github.event.inputs.start_phase || '1' }}
+
+      - name: Run Phase 1 — Epic Writing
+        if: ${{ github.event.inputs.start_phase <= '1' }}
+        run: python scripts/run_pipeline.py --phase 1
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Run Phase 2 — User Story Writing
+        if: ${{ github.event.inputs.start_phase <= '2' }}
+        run: python scripts/run_pipeline.py --phase 2
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Run Phase 3 — Architecture
+        if: ${{ github.event.inputs.start_phase <= '3' }}
+        run: python scripts/run_pipeline.py --phase 3
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Run Phase 4 — Sprint Planning
+        if: ${{ github.event.inputs.start_phase <= '4' }}
+        run: python scripts/run_pipeline.py --phase 4
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Commit planning outputs
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config --global user.name "Pipeline Bot"
+          git config --global user.email "pipeline-bot@github.com"
+          git add docs/epics/ docs/user-stories/ docs/architecture/ docs/sprints/ docs/roadmap.md PROJECT_PROGRESS.md
+          git diff --cached --quiet || git commit -m "docs: phases 1-4 pipeline outputs [skip ci]"
+          git push
+
+  # ── Phase 5: Development (sequential, needs planning) ─────────────────────
+  development:
+    name: "Phase 5 · Development"
+    runs-on: ubuntu-latest
+    needs: planning
+    if: ${{ github.event.inputs.start_phase <= '5' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}   # pick up planning commits
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pipeline + project dependencies
+        run: pip install openai httpx pyyaml
+
+      - name: Run Phase 5 — Development
+        run: python scripts/run_pipeline.py --phase 5
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Commit development outputs
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config --global user.name "Pipeline Bot"
+          git config --global user.email "pipeline-bot@github.com"
+          git add src/ tests/ docs/guides/ README.md PROJECT_PROGRESS.md
+          git diff --cached --quiet || git commit -m "feat: phase 5 development outputs [skip ci]"
+          git push
+
+  # ── Phase 6: Code Review (needs development) ──────────────────────────────
+  code-review:
+    name: "Phase 6 · Code Review"
+    runs-on: ubuntu-latest
+    needs: development
+    if: ${{ github.event.inputs.start_phase <= '6' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install openai httpx pyyaml
+
+      - name: Run Phase 6 — Code Review
+        run: python scripts/run_pipeline.py --phase 6
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Commit review outputs
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config --global user.name "Pipeline Bot"
+          git config --global user.email "pipeline-bot@github.com"
+          git add docs/code-reviews/ src/ PROJECT_PROGRESS.md
+          git diff --cached --quiet || git commit -m "docs: phase 6 code review outputs [skip ci]"
+          git push
+
+  # ── Phase 7-8: Test Cases + Tester (needs code review) ────────────────────
+  qa:
+    name: "Phases 7–8 · Test Cases & Testing"
+    runs-on: ubuntu-latest
+    needs: code-review
+    if: ${{ github.event.inputs.start_phase <= '7' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install all project + pipeline dependencies
+        run: pip install -r requirements.txt openai httpx pyyaml
+
+      - name: Run Phase 7 — Test Case Writing
+        run: python scripts/run_pipeline.py --phase 7
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Run Phase 8 — Execute Tests (Tester Agent)
+        run: python scripts/run_pipeline.py --phase 8
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          PYTHONPATH: src
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Commit QA outputs
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config --global user.name "Pipeline Bot"
+          git config --global user.email "pipeline-bot@github.com"
+          git add docs/test-cases/ docs/test-results/ docs/bug-reports/ tests/ PROJECT_PROGRESS.md
+          git diff --cached --quiet || git commit -m "test: phases 7-8 QA outputs [skip ci]"
+          git push
+
+  # ── Phase 9-10: Deployment & DevOps (needs passing tests) ─────────────────
+  deployment:
+    name: "Phases 9–10 · Deployment & DevOps"
+    runs-on: ubuntu-latest
+    needs: qa
+    if: ${{ github.event.inputs.start_phase <= '9' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pipeline dependencies
+        run: pip install openai httpx pyyaml
+
+      - name: Run Phase 9 — Deployment Agent
+        run: python scripts/run_pipeline.py --phase 9
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Run Phase 10 — DevOps
+        run: python scripts/run_pipeline.py --phase 10
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://gpt4ifx.icp.infineon.com' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+      - name: Build Docker image
+        if: ${{ github.event.inputs.dry_run != 'true' && hashFiles('Dockerfile') != '' }}
+        run: docker build -t eng2sql:pipeline-test .
+
+      - name: Commit deployment outputs
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config --global user.name "Pipeline Bot"
+          git config --global user.email "pipeline-bot@github.com"
+          git add Dockerfile docker-compose.yml .env.example .gitignore .pre-commit-config.yaml \
+                  docs/deployment/ PROJECT_PROGRESS.md
+          git diff --cached --quiet || git commit -m "chore: phases 9-10 deployment outputs [skip ci]"
+          git push
+
+  # ── Final: Pipeline Summary ───────────────────────────────────────────────
+  summary:
+    name: "Pipeline Summary"
+    runs-on: ubuntu-latest
+    needs: [planning, development, code-review, qa, deployment]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Print PROJECT_PROGRESS.md
+        run: cat PROJECT_PROGRESS.md
+
+      - name: Pipeline result
+        run: |
+          echo "## Pipeline Complete"
+          echo "Planning:    ${{ needs.planning.result }}"
+          echo "Development: ${{ needs.development.result }}"
+          echo "Code Review: ${{ needs.code-review.result }}"
+          echo "QA:          ${{ needs.qa.result }}"
+          echo "Deployment:  ${{ needs.deployment.result }}"

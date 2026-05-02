@@ -1,0 +1,47 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+cert/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Secrets / certificates (private keys only — CA bundles like cert/ are tracked)
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Test & coverage
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Linting & type checking
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/*.log
+*.iml
+.idea/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution
+dist/
+build/
+*.egg-info/
