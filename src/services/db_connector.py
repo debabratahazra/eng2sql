@@ -11,12 +11,29 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from models.config import DBConfig
 from utils.exceptions import DatabaseConnectionError, QueryExecutionError
 from utils.logger import get_logger
+from utils.network import LOOPBACK_HOSTS, is_wsl2, probe_reachable_host
 
 logger = get_logger(__name__)
 
 _SYSTEM_DATABASES: frozenset[str] = frozenset(
-    {"information_schema", "performance_schema", "mysql", "sys"}
+    {
+        # MySQL system schemas
+        "information_schema",
+        "performance_schema",
+        "mysql",
+        "sys",
+        # PostgreSQL system / template databases (EPIC-009 / US-046)
+        "postgres",
+        "template0",
+        "template1",
+    }
 )
+
+# Per-dialect query used by ``DBConnector.list_databases`` (EPIC-009 / US-046).
+_LIST_DB_QUERIES: dict[str, str] = {
+    "mysql": "SHOW DATABASES",
+    "postgresql": "SELECT datname FROM pg_database WHERE datistemplate = false",
+}
 
 
 class DBConnector:
@@ -35,6 +52,24 @@ class DBConnector:
             DatabaseConnectionError: If the connection cannot be established.
         """
         try:
+            # WSL2 fail-fast: when running inside WSL2 against a loopback host
+            # the Windows-side DB is unreachable via WSL2's loopback adapter.
+            # Probe the host first; if no address answers within 1 s, raise a
+            # clear actionable error instead of waiting for the SQLAlchemy
+            # connect_timeout to elapse. Mirrors the BUG-006 fix from
+            # ``mongo_connector``; extracted to ``utils.network`` in US-050.
+            host_lower = (config.host or "").lower()
+            if host_lower in LOOPBACK_HOSTS and is_wsl2():
+                probed = probe_reachable_host(config.host, config.port, timeout_s=1.0)
+                if probed == config.host:
+                    raise DatabaseConnectionError(
+                        f"Could not reach {config.dialect} at {config.host}:{config.port} "
+                        "from WSL2. WSL2 cannot reach services bound to 'localhost' / "
+                        "127.0.0.1 on the Windows host. Bind the database to 0.0.0.0 "
+                        "or use the Windows host IP. "
+                        "See: https://learn.microsoft.com/windows/wsl/networking"
+                    )
+
             engine = create_engine(
                 config.connection_url,
                 pool_pre_ping=True,
@@ -114,11 +149,16 @@ class DBConnector:
             ) from exc
 
     def list_databases(self, engine: Engine) -> list[str]:
-        """Return non-system database names visible to the connected MySQL user.
+        """Return non-system database names visible to the connected user.
 
-        Executes ``SHOW DATABASES`` and filters out the four standard MySQL
-        system schemas: ``information_schema``, ``performance_schema``,
-        ``mysql``, and ``sys``.
+        Dispatches on ``engine.dialect.name``:
+
+        - ``mysql``      → executes ``SHOW DATABASES`` and filters out the four
+          standard MySQL system schemas (``information_schema``,
+          ``performance_schema``, ``mysql``, ``sys``).
+        - ``postgresql`` → executes
+          ``SELECT datname FROM pg_database WHERE datistemplate = false``
+          and filters out ``postgres``, ``template0``, ``template1`` (EPIC-009).
 
         Args:
             engine: A server-level SQLAlchemy engine (no database selected).
@@ -129,10 +169,18 @@ class DBConnector:
         Raises:
             DatabaseConnectionError: If the query fails due to a connection or
                 permission issue.
+            NotImplementedError: If the engine's dialect is not supported.
         """
+        dialect_name = engine.dialect.name
+        query = _LIST_DB_QUERIES.get(dialect_name)
+        if query is None:
+            raise NotImplementedError(
+                f"list_databases is not implemented for dialect {dialect_name!r}. "
+                f"Supported: {sorted(_LIST_DB_QUERIES)}."
+            )
         try:
             with engine.connect() as conn:
-                rows = conn.execute(text("SHOW DATABASES")).fetchall()
+                rows = conn.execute(text(query)).fetchall()
         except SQLAlchemyError as exc:
             raise DatabaseConnectionError(
                 f"Failed to list databases: {exc}"

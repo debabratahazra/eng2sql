@@ -153,6 +153,20 @@ def file_output_instructions() -> str:
 # ── Phase readiness checks ────────────────────────────────────────────────────
 def phase_complete(phase: int) -> bool:
     """Return True if the phase's required outputs already exist."""
+
+    # Phase 0 — Retro Analysis: complete when every SPRINT-*-retro.md is recorded
+    # as processed in PROJECT_PROGRESS.md.
+    if phase == 0:
+        retro_files = sorted((DOCS_DIR / "sprints").glob("SPRINT-*-retro.md"))
+        if not retro_files:
+            return True  # no retros exist yet → nothing to process
+        progress_text = read(ROOT / "PROJECT_PROGRESS.md")
+        for retro in retro_files:
+            sprint_tag = retro.stem  # e.g. SPRINT-7-retro
+            if f"Processed {sprint_tag}.md" not in progress_text:
+                return False
+        return True
+
     checks: dict[int, list[Path]] = {
         1: [DOCS_DIR / "epics" / f"EPIC-00{i}-{s}.md"
             for i, s in [(1, "core-sql-generation"), (2, "streamlit-ui"),
@@ -189,6 +203,62 @@ def phase_complete(phase: int) -> bool:
 
 
 # ── Phase runners ─────────────────────────────────────────────────────────────
+def run_phase_0(client: OpenAI) -> None:
+    """Retro Analysis — seed next sprint from retrospective action items."""
+    print("\n── Phase 0: Retro Analysis ───────────────────────────────────")
+    retro_files = sorted((DOCS_DIR / "sprints").glob("SPRINT-*-retro.md"))
+    if not retro_files:
+        print("  ℹ️  No retro files found — skipping.")
+        return
+
+    progress_text = read(ROOT / "PROJECT_PROGRESS.md")
+    unprocessed = [
+        f for f in retro_files
+        if f"Processed {f.stem}.md" not in progress_text
+    ]
+    if not unprocessed:
+        print("  ✅ All retros already processed — skipping.")
+        return
+
+    print(f"  Found {len(unprocessed)} unprocessed retro(s): "
+          f"{[f.name for f in unprocessed]}")
+
+    # Build context: all existing IDs so the LLM can determine next numbers
+    existing_epics = read_dir(DOCS_DIR / "epics")
+    existing_bugs = read_dir(DOCS_DIR / "bug-reports")
+    existing_stories: dict[str, str] = {}
+    for sprint_dir in sorted((DOCS_DIR / "user-stories").glob("sprint-*")):
+        existing_stories.update(read_dir(sprint_dir))
+    existing_sprints = read_dir(DOCS_DIR / "sprints")
+
+    retro_contents = "\n\n---\n\n".join(
+        f"# {f.name}\n{f.read_text(encoding='utf-8')}" for f in unprocessed
+    )
+
+    system = (
+        prompt_file("11-retro-analyzer.prompt.md")
+        + "\n\n"
+        + read(ROOT / ".github" / "instructions" / "retro-analyzer.instructions.md")
+        + file_output_instructions()
+    )
+    user = (
+        f"PROJECT_PROGRESS.md:\n{progress_text}\n\n"
+        f"docs/roadmap.md:\n{read(DOCS_DIR / 'roadmap.md')}\n\n"
+        f"Unprocessed retro files:\n{retro_contents}\n\n"
+        f"Existing epic files: {list(existing_epics.keys())}\n"
+        f"Existing user story files: {list(existing_stories.keys())}\n"
+        f"Existing bug report files: {list(existing_bugs.keys())}\n"
+        f"Existing sprint files: {list(existing_sprints.keys())}\n\n"
+        "Process ALL unprocessed retro files listed above. For each one, create the "
+        "required Bug Reports, User Stories, and/or Epics. Update docs/roadmap.md and "
+        "PROJECT_PROGRESS.md. Follow all rules in the retro-analyzer instructions. "
+        "Use sequential IDs that do not conflict with existing files."
+    )
+    response = call_api(client, system, user)
+    files = parse_file_blocks(response)
+    write_files(files)
+
+
 def run_phase_1(client: OpenAI) -> None:
     """Epic Writing."""
     print("\n── Phase 1: Epic Writing ─────────────────────────────────────")
@@ -424,6 +494,7 @@ def run_phase_10(client: OpenAI) -> None:
 
 # ── Phase registry ────────────────────────────────────────────────────────────
 PHASES: dict[int, tuple[str, Any]] = {
+    0:  ("Retro Analysis",      run_phase_0),
     1:  ("Epic Writing",        run_phase_1),
     2:  ("User Story Writing",  run_phase_2),
     3:  ("Architecture",        run_phase_3),
@@ -451,11 +522,12 @@ def main() -> None:
     if args.dry_run:
         DRY_RUN = True
 
-    start_phase = int(os.environ.get("PIPELINE_START_PHASE", "1"))
+    start_phase = int(os.environ.get("PIPELINE_START_PHASE", "0"))
 
     if args.check_only:
         print("\n── Pipeline Phase Status ─────────────────────────────────")
-        for n, (name, _) in PHASES.items():
+        for n in sorted(PHASES.keys()):
+            name, _ = PHASES[n]
             status = "✅ COMPLETE" if phase_complete(n) else "🔲 PENDING"
             print(f"  Phase {n:2d}: {name:<25} {status}")
         return
@@ -478,7 +550,7 @@ def main() -> None:
     completed: list[str] = []
     skipped: list[str] = []
 
-    for n in range(start_phase, len(PHASES) + 1):
+    for n in sorted(k for k in PHASES if k >= start_phase):
         name, runner = PHASES[n]
         if phase_complete(n):
             print(f"\n⏭  Phase {n} ({name}): already complete — skipping")

@@ -21,6 +21,7 @@ Apply these routing rules in order:
 
 | Condition | Next Agent |
 |-----------|-----------|
+| Any `SPRINT-*-retro.md` exists without a "Retro Analyzer \| Processed" entry in `PROJECT_PROGRESS.md` | **Retro Analyzer** → `.github/prompts/11-retro-analyzer.prompt.md` |
 | No epics defined yet | **Epic Writer** → `.github/prompts/02-epic-writer.prompt.md` |
 | Epics exist, no user stories | **User Story Writer** → `.github/prompts/03-user-story-writer.prompt.md` |
 | User stories exist, no architecture | **Architect** → `.github/prompts/04-architect.prompt.md` |
@@ -29,9 +30,11 @@ Apply these routing rules in order:
 | Code written, no review done | **Code Reviewer** → `.github/prompts/06-code-reviewer.prompt.md` |
 | Code reviewed, no test cases | **Test Case Writer** → `.github/prompts/07-test-case-writer.prompt.md` |
 | Test cases exist, tests not run | **Tester** → `.github/prompts/08-tester.prompt.md` |
+| Tests pass, no integration tests exist for last completed story/bug | **Integration Test Agent** → `.github/prompts/13-integration-test-agent.prompt.md` |
 | Tests pass, no deployment config | **Deployment Agent** → `.github/prompts/09-deployment-agent.prompt.md` |
 | Deployment done, infra not set up | **DevOps** → `.github/prompts/10-devops.prompt.md` |
-| Bug reports open | **Developer** → `.github/prompts/05-developer.prompt.md` |
+| Bug reports open (`🔲 Backlog` or `🔄 In Progress`) | **Bug Fix Agent** → `.github/prompts/12-bug-fix-agent.prompt.md` |
+| Bug fix just applied, integration tests not re-run | **Integration Test Agent** → `.github/prompts/13-integration-test-agent.prompt.md` |
 | Everything complete | 🎉 **Project Complete** |
 
 ## Step 3 — Issue Handoff

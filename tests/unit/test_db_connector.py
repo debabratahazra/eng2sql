@@ -15,8 +15,8 @@ def connector() -> DBConnector:
     return DBConnector()
 
 
-def _mock_engine(rows: list[tuple[str]]) -> MagicMock:
-    """Return a MagicMock engine whose SHOW DATABASES returns *rows*."""
+def _mock_engine(rows: list[tuple[str]], dialect_name: str = "mysql") -> MagicMock:
+    """Return a MagicMock engine whose list-databases query returns *rows*."""
     mock_result = MagicMock()
     mock_result.fetchall.return_value = rows
 
@@ -27,6 +27,7 @@ def _mock_engine(rows: list[tuple[str]]) -> MagicMock:
 
     mock_engine = MagicMock()
     mock_engine.connect.return_value = mock_conn
+    mock_engine.dialect.name = dialect_name
     return mock_engine
 
 
@@ -109,6 +110,7 @@ class TestListDatabases:
 
         mock_engine = MagicMock()
         mock_engine.connect.return_value = mock_conn
+        mock_engine.dialect.name = "mysql"
 
         with pytest.raises(DatabaseConnectionError, match="Failed to list databases"):
             connector.list_databases(mock_engine)
@@ -124,6 +126,7 @@ class TestListDatabases:
 
         mock_engine = MagicMock()
         mock_engine.connect.return_value = mock_conn
+        mock_engine.dialect.name = "mysql"
 
         with pytest.raises(DatabaseConnectionError, match="Access denied"):
             connector.list_databases(mock_engine)

@@ -89,11 +89,11 @@ def list_databases(self, engine: Engine) -> list[str]:
   unchanged (SQLite doesn't support `SHOW DATABASES`; mock used in unit tests)
 
 ## Definition of Done
-- [ ] `src/services/db_connector.py` — `list_databases()` implemented
-- [ ] `tests/unit/test_db_connector.py` — unit tests covering all AC scenarios
-- [ ] 100% branch coverage on `list_databases()`
-- [ ] `ruff` and `mypy` clean on both source and test file
-- [ ] Code review approved
+- [x] `src/services/db_connector.py` — `list_databases()` implemented
+- [x] `tests/unit/test_db_connector.py` — unit tests covering all AC scenarios
+- [x] 100% branch coverage on `list_databases()`
+- [x] `ruff` and `mypy` clean on both source and test file
+- [x] Code review approved
 
 ## Status
 ✅ Done

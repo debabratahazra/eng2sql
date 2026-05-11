@@ -7,7 +7,7 @@ from sqlalchemy.engine import Engine
 from typing import Generator
 from unittest.mock import MagicMock, patch
 
-from models.config import AppConfig, DBConfig, SchemaColumn, TableSchema
+from models.config import AppConfig, DBConfig, MongoConfig, SchemaColumn, TableSchema
 
 
 # ── Schema fixtures ───────────────────────────────────────────────────────────
@@ -121,3 +121,171 @@ def sqlite_engine() -> Generator[Engine, None, None]:
         conn.commit()
     yield engine
     engine.dispose()
+
+
+# ── MongoDB fixtures ──────────────────────────────────────────────────────────
+
+@pytest.fixture
+def mongo_config() -> MongoConfig:
+    """Sample MongoDB configuration for unit tests (never connects to real server)."""
+    return MongoConfig(
+        host="localhost",
+        port=27017,
+        username="test_user",
+        password="test_pass",
+        auth_source="admin",
+        auth_mechanism="SCRAM-SHA-256",
+    )
+
+
+@pytest.fixture
+def mongo_config_no_auth() -> MongoConfig:
+    """MongoDB configuration with no-auth mode for unit tests."""
+    return MongoConfig(
+        host="localhost",
+        port=27017,
+        auth_mechanism="None / No Auth",
+    )
+
+
+# ── Docker-based MySQL integration fixture (US-042) ──────────────────────────
+
+@pytest.fixture(scope="session")
+def mysql_container() -> Generator[DBConfig, None, None]:
+    """Spin up a real MySQL 8.0 container for integration tests.
+
+    Skips the test (rather than failing) when:
+    - The optional ``testcontainers`` package is not installed.
+    - The Docker daemon is not running / not reachable.
+
+    Yields:
+        A :class:`DBConfig` pointing at the dynamically-mapped container port,
+        ready to feed into :meth:`DBConnector.create_engine`.
+
+    Notes:
+        - Container is started **once per pytest session** (scope="session")
+          to keep the integration suite under ~30 s of cold-start overhead.
+        - The container is torn down automatically when the session ends.
+        - All tests using this fixture should also be marked
+          ``@pytest.mark.docker`` so they can be excluded from the default
+          unit-test run with ``-m "not docker"``.
+    """
+    try:
+        from testcontainers.mysql import MySqlContainer  # type: ignore[import-not-found]
+    except ImportError:
+        pytest.skip("testcontainers not installed — skipping Docker MySQL fixture")
+
+    try:
+        container = MySqlContainer(
+            "mysql:8.0",
+            username="testroot",
+            password="testroot",
+            dbname="testdb",
+        )
+        container.start()
+    except Exception as exc:  # noqa: BLE001
+        # DockerException, ConnectionError, etc. — collapse into a single skip
+        pytest.skip(f"Docker not available — skipping Docker MySQL fixture: {exc}")
+
+    try:
+        host = container.get_container_host_ip()
+        port = int(container.get_exposed_port(3306))
+        yield DBConfig(
+            host=host,
+            port=port,
+            user="testroot",
+            password="testroot",
+            database="testdb",
+        )
+    finally:
+        try:
+            container.stop()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+# -- Docker-based PostgreSQL integration fixture (EPIC-009 / US-048) ---------
+
+@pytest.fixture(scope="session")
+def postgres_container() -> Generator[DBConfig, None, None]:
+    """Spin up a real PostgreSQL 16 container for integration tests.
+
+    Skip semantics mirror :func:`mysql_container`: skips when ``testcontainers``
+    is not installed or the Docker daemon is unreachable.
+
+    Yields:
+        A :class:`DBConfig` pointing at the dynamically-mapped container port,
+        with ``dialect="postgresql"`` so :meth:`DBConnector.create_engine`
+        builds a ``postgresql+psycopg://`` URL.
+    """
+    try:
+        from testcontainers.postgres import PostgresContainer  # type: ignore[import-not-found]
+    except ImportError:
+        pytest.skip("testcontainers[postgres] not installed - skipping Docker Postgres fixture")
+
+    try:
+        container = PostgresContainer(
+            "postgres:16-alpine",
+            username="testroot",
+            password="testroot",
+            dbname="testdb",
+        )
+        container.start()
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"Docker not available - skipping Docker Postgres fixture: {exc}")
+
+    try:
+        host = container.get_container_host_ip()
+        port = int(container.get_exposed_port(5432))
+        yield DBConfig(
+            host=host,
+            port=port,
+            user="testroot",
+            password="testroot",
+            database="testdb",
+            dialect="postgresql",
+            sslmode="disable",
+        )
+    finally:
+        try:
+            container.stop()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+# ── AppTest fixture investigation (US-077) ────────────────────────────────────
+#
+# FINDING: Module/session-scoped AppTest fixtures are UNSAFE for tests that
+# mutate widget state or session_state.  Interactive tests (button clicks,
+# radio changes, text input) leave dirty state in the AppTest instance, causing
+# subsequent tests to see stale values and become order-dependent — a violation
+# of the test-isolation requirement.
+#
+# SAFE USE: A module-scoped fixture is acceptable ONLY for tests that call
+# `at.run()` exactly once and make NO widget mutations.  These read-only checks
+# save the ~1–2 s AppTest cold-start overhead when multiple checks operate on
+# the same initial render.
+#
+# See docs/guides/developer-guide.md §"AppTest Fixture Scoping" for full
+# analysis and timing benchmark.
+
+@pytest.fixture(scope="module")
+def initial_app_state():
+    """Module-scoped AppTest snapshot of the app's initial render.
+
+    **READ-ONLY — do not call click(), set_value(), or mutate session_state.**
+
+    Safe for tests that only inspect the initial widget tree or session-state
+    defaults.  Using this fixture for interactive tests will cause flaky,
+    order-dependent failures.
+
+    Returns:
+        A fully-rendered :class:`~streamlit.testing.v1.AppTest` instance.
+    """
+    import pathlib
+    from streamlit.testing.v1 import AppTest
+
+    app_path = str(pathlib.Path(__file__).parent.parent / "src" / "app.py")
+    at = AppTest.from_file(app_path, default_timeout=30)
+    at.run()
+    return at

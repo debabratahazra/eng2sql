@@ -50,11 +50,11 @@ Feature: Remove Static Schema Mode
 - `SidebarComponent.render()` now always calls `_render_db_form()` — no conditional
 
 ## Definition of Done
-- [ ] `src/components/sidebar.py` — radio and static branch removed
-- [ ] `src/app.py` — static schema loading removed; `mode` session-state key removed
-- [ ] All existing tests still pass
-- [ ] `ruff` and `mypy` clean
-- [ ] Code review approved
+- [x] `src/components/sidebar.py` — radio and static branch removed
+- [x] `src/app.py` — static schema loading removed; `mode` session-state key removed
+- [x] All existing tests still pass
+- [x] `ruff` and `mypy` clean
+- [x] Code review approved
 
 ## Status
 ✅ Done

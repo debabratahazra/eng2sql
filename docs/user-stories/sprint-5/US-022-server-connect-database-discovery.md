@@ -63,13 +63,13 @@ Feature: Step 1 — Server Connect & Database Discovery
   detect change via comparison with previously stored values)
 
 ## Definition of Done
-- [ ] `src/components/sidebar.py` — Step 1 form implemented
-- [ ] `src/services/db_connector.py` — `list_databases()` method added (US-024)
-- [ ] Session state keys `db_server_engine` and `available_databases` populated
-- [ ] Credential change detection clears downstream state
-- [ ] Error messages visible for bad credentials and unreachable hosts
-- [ ] `ruff` and `mypy` clean
-- [ ] Code review approved
+- [x] `src/components/sidebar.py` — Step 1 form implemented
+- [x] `src/services/db_connector.py` — `list_databases()` method added (US-024)
+- [x] Session state keys `db_server_engine` and `available_databases` populated
+- [x] Credential change detection clears downstream state
+- [x] Error messages visible for bad credentials and unreachable hosts
+- [x] `ruff` and `mypy` clean
+- [x] Code review approved
 
 ## Status
 ✅ Done

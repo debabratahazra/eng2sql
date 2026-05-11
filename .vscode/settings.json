@@ -31,6 +31,5 @@
     }
   ],
   "chat.agent.enabled": true,
-  "chat.mcp.enabled": true,
   "github.copilot.chat.agent.thinkingTool": true
 }

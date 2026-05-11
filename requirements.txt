@@ -4,6 +4,8 @@ openai>=1.30.0
 httpx>=0.27.0
 sqlalchemy>=2.0.0
 pymysql>=1.1.0
+psycopg[binary]>=3.2,<4
+pymongo>=4.7
 pandas>=2.2.0
 pyyaml>=6.0.1
 python-dotenv>=1.0.0
@@ -12,6 +14,17 @@ python-dotenv>=1.0.0
 pytest>=8.2.0
 pytest-cov>=5.0.0
 pytest-mock>=3.14.0
+pytest-xdist>=3.5.0   # US-074: parallel test execution (~41 % speedup on 335 unit tests)
+# US-042 — Docker-based MySQL integration fixture (Sprint 9). Optional at
+# runtime: tests using this dependency are gated behind the @pytest.mark.docker
+# marker and skip gracefully when Docker / testcontainers are unavailable.
+testcontainers[mysql]>=4.7.0
+# US-061 / US-063 — Docker-based MongoDB integration fixture (Sprint 13/14).
+# Same skip semantics as the mysql extra above.
+testcontainers[mongo]>=4.7.0
+# EPIC-009 / US-048 — Docker-based PostgreSQL integration fixture (Sprint 10).
+# Same skip semantics as the mysql extra above.
+testcontainers[postgres]>=4.7.0
 
 # Linting & type checking
 ruff>=0.4.4

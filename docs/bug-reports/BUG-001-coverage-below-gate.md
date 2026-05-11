@@ -2,11 +2,11 @@
 
 **Severity**: High
 **Sprint**: Sprint 1
-**Status**: 🔴 Open
+**Status**: ✅ Fixed (resolved Sprint 3 — coverage reached 91% via Streamlit AppTest UI tests; current 93.97% as of Sprint 9)
 **Reported By**: Tester Agent
 **Assigned To**: Developer Agent (Sprint 3)
-**Linked Test Result**: TR-001
-**Linked Test Cases**: TC-005–010 (partially), UI TCs pending
+**Linked Test Result**: TR-001 (filed) / TR-003 (resolved) / TR-009 (current 93.97%)
+**Linked Test Cases**: TC-005–010 + TC-038/039 (AppTest)
 
 ---
 

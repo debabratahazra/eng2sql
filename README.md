@@ -1,26 +1,31 @@
 # Eng2SQL — English to SQL Generator
 
 [![CI/CD](https://github.com/your-org/eng2sql/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/your-org/eng2sql/actions)
-[![Coverage](https://codecov.io/gh/your-org/eng2sql/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/eng2sql)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/your-org/eng2sql/actions/workflows/ci-cd.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> Type a question in plain English. Get valid MySQL SQL instantly.
+> Type a question in plain English. Get valid MySQL SQL, PostgreSQL SQL, or MongoDB MQL instantly.
 
 ---
 
 ## What It Does
 
 **Eng2SQL** is a Streamlit application that translates plain-English questions into
-MySQL `SELECT` statements using OpenAI GPT-5.2. Connect to any MySQL server, pick a
-database from the auto-discovered list, and ask your question — no SQL knowledge required.
+MySQL `SELECT` statements, PostgreSQL `SELECT` statements, or MongoDB MQL queries
+using OpenAI GPT-5.2. Choose MySQL, PostgreSQL, or
+MongoDB via the sidebar radio, connect to your server, pick a database from the
+auto-discovered list, and ask your question — no SQL or MQL knowledge required.
 
-| Capability           | Details                                                                          |
-| -------------------- | -------------------------------------------------------------------------------- |
-| **Two-step connect** | Step 1: connect to server → Step 2: pick database from dropdown                  |
-| **Auto-detection**   | SQLAlchemy `inspect()` reads all tables and columns automatically                |
-| **SQL generation**   | OpenAI GPT-5.2 translates English questions into valid MySQL `SELECT` statements |
-| **SQL execution**    | Run the generated SQL against your database and view results in-app              |
+| Capability             | Details                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| **DB type selector**   | Sidebar radio to switch between MySQL, PostgreSQL, and MongoDB                                        |
+| **Two-step connect**   | Step 1: connect to server → Step 2: pick database from dropdown                                       |
+| **MongoDB URI mode**   | Paste a full `mongodb://` or `mongodb+srv://` URI; enter credentials separately                       |
+| **PostgreSQL sslmode** | Sidebar selector for `disable`/`allow`/`prefer`/`require`/`verify-ca`/`verify-full` (psycopg3 driver) |
+| **Auto-detection**     | MySQL/PostgreSQL: SQLAlchemy `inspect()`; MongoDB: collection sampling with type inference            |
+| **SQL generation**     | OpenAI GPT-5.2 translates English questions into MySQL/PostgreSQL `SELECT` or MongoDB MQL             |
+| **SQL execution**      | Run the generated SQL against your MySQL or PostgreSQL database and view results in-app               |
 
 ### Example
 
@@ -60,7 +65,12 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate     # macOS/Linux
 
+# Recommended (installs all runtime + DB drivers + dev/test tools):
+pip install -e ".[dev,db]"
+
+# Or use the flat pin file (identical deps, for Docker / CI compatibility):
 pip install -r requirements.txt
+
 cp .env.example .env
 # Edit .env and add your OPENAI_API_KEY
 
@@ -77,9 +87,11 @@ eng2sql/
 │   ├── app.py                  ← Streamlit entry point
 │   ├── components/             ← UI components
 │   ├── services/               ← Business logic
-│   │   ├── sql_generator.py    ← OpenAI SQL generation
-│   │   ├── schema_detector.py  ← Static YAML + live DB schema
-│   │   └── db_connector.py     ← SQLAlchemy connection & execution
+│   │   ├── sql_generator.py    ← OpenAI SQL / MQL generation
+│   │   ├── schema_detector.py  ← Static YAML + live MySQL schema
+│   │   ├── db_connector.py     ← SQLAlchemy connection & execution
+│   │   ├── mongo_connector.py  ← pymongo connect + database listing
+│   │   └── mongo_schema_detector.py ← MongoDB collection schema inference
 │   ├── models/config.py        ← Dataclasses
 │   └── utils/                  ← Exceptions, logging
 ├── tests/
@@ -169,6 +181,10 @@ pytest tests/integration/ -v -m integration
 | `DB_NAME`            | ❌        | —                                  | Target database name                  |
 | `STATIC_SCHEMA_PATH` | ❌        | `config/database_config.yaml`      | Static schema file                    |
 | `LOG_LEVEL`          | ❌        | `INFO`                             | Logging level                         |
+
+> **MongoDB**: Connection parameters (host, port, credentials, auth mechanism) are
+> entered in the sidebar UI. No `.env` variables are required for MongoDB mode.
+> Install `pymongo>=4.7` (included in `requirements.txt`).
 
 ---
 

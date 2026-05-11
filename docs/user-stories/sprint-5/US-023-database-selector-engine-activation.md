@@ -70,12 +70,12 @@ Feature: Step 2 — Database Selector & Engine Activation
   `available_databases` is an empty list
 
 ## Definition of Done
-- [ ] `src/components/sidebar.py` — Step 2 block implemented
-- [ ] `src/app.py` — SQL generation gated on `db_engine` and `detected_schema` being set
-- [ ] Schema viewer populates from `detected_schema` after database selection
-- [ ] Changing database triggers schema refresh
-- [ ] `ruff` and `mypy` clean
-- [ ] Code review approved
+- [x] `src/components/sidebar.py` — Step 2 block implemented
+- [x] `src/app.py` — SQL generation gated on `db_engine` and `detected_schema` being set
+- [x] Schema viewer populates from `detected_schema` after database selection
+- [x] Changing database triggers schema refresh
+- [x] `ruff` and `mypy` clean
+- [x] Code review approved
 
 ## Status
 ✅ Done

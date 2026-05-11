@@ -1,19 +1,21 @@
 # Eng2SQL — User Guide
 
-> **Last Updated**: 2026-05-02
-> **Version**: [v1.0.0](../deployment/RELEASE-1.0.0.md)
+> **Last Updated**: 2026-05-28
+> **Version**: v1.2.0 (Sprint 7)
 
 ---
 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Connecting to MySQL — Two-Step Flow](#connecting-to-mysql--two-step-flow)
-3. [Generating SQL](#generating-sql)
-4. [Step-by-Step Progress Indicator](#step-by-step-progress-indicator)
-5. [Reading Your SQL Results](#reading-your-sql-results)
-6. [Troubleshooting](#troubleshooting)
-7. [FAQ](#faq)
+2. [Selecting a Database Type](#selecting-a-database-type)
+3. [Connecting to MySQL — Two-Step Flow](#connecting-to-mysql--two-step-flow)
+4. [Connecting to MongoDB — Two-Step Flow](#connecting-to-mongodb--two-step-flow)
+5. [Generating SQL / MQL](#generating-sql--mql)
+6. [Step-by-Step Progress Indicator](#step-by-step-progress-indicator)
+7. [Reading Your SQL Results](#reading-your-sql-results)
+8. [Troubleshooting](#troubleshooting)
+9. [FAQ](#faq)
 
 ---
 
@@ -84,14 +86,70 @@ What is the average rating per product category?
 
 ## Live Database Mode
 
+---
+
+## Selecting a Database Type
+
+The sidebar shows a **Database type** radio button at the top. Choose:
+- **MySQL** — connect to a MySQL 8.0 server (default)
+- **PostgreSQL** — connect to a PostgreSQL 12+ server (EPIC-009)
+- **MongoDB** — connect to a MongoDB server
+
+Switching the radio clears any existing connection state, so you always start fresh with
+the chosen database engine.
+
+---
+
+## Connecting to PostgreSQL — Two-Step Flow
+
+### Step 1 — Select PostgreSQL
+
+In the **Database type** radio at the top of the sidebar, select **PostgreSQL**.
+
+### Step 2 — Enter Connection Details
+
+| Field    | Example         | Notes                                                                                                                              |
+| -------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Host     | `localhost`     | IP or hostname                                                                                                                     |
+| Port     | `5432`          | Default PostgreSQL port                                                                                                            |
+| User     | `readonly_user` | Use a read-only role with `CONNECT` + `USAGE` + `SELECT` grants only                                                               |
+| Password | `••••••••`      | Stored only in session memory; cleared after Step 2                                                                                |
+| SSL mode | `prefer`        | `disable` / `allow` / `prefer` / `require` / `verify-ca` / `verify-full`                                                           |
+| Admin DB | `postgres`      | Database used to enumerate other databases (US-052). Override if your provider has disabled `postgres` (e.g. Azure Single Server). |
+
+The first connection attaches to the **Admin DB** (default `postgres`) so we can
+enumerate all user-accessible databases. Once Step 2 selects the target database, a new
+engine is built against it.
+
+> **sslmode tip**: For local development use `disable` or `prefer`. For managed cloud
+> instances (RDS, Azure, etc.) use `require` or `verify-full` and supply CA certs via
+> the `PGSSLROOTCERT` environment variable. When `verify-ca` or `verify-full` is
+> selected and no CA bundle is reachable, the sidebar shows a yellow warning
+> reminding you to set `PGSSLROOTCERT` or place a bundle at `~/.postgresql/root.crt`
+> (US-056).
+
+### Step 3 — Connect & Select
+
+1. Click **🔗 Connect** — the dropdown populates with non-template, non-system
+   databases (`postgres`, `template0`, `template1` are filtered out).
+2. Pick your database and click **Select Database** — the live schema is auto-detected.
+
+### Step 4 — Generate & Execute
+
+Identical to MySQL: type the question, click **⚡ Generate SQL**, then **▶ Execute SQL**.
+The LLM is told the dialect is PostgreSQL and uses `ILIKE`, `::` casts, and `LIMIT N
+OFFSET M` accordingly.
+
+---
+
+## Live Database Mode
+
 Live Database mode connects to your MySQL database, auto-detects its schema, and uses the
 real table structure when generating and executing SQL.
 
 ### Step 1 — Select Live Database Mode
 
-Click **"Live Database"** in the sidebar radio buttons.
-
-### Step 2 — Enter Connection Details
+Click **"Live Database"** in the sidebar radio buttons.### Step 2 — Enter Connection Details
 
 | Field    | Example         | Notes                         |
 | -------- | --------------- | ----------------------------- |
@@ -119,12 +177,83 @@ Click **🔄 Refresh Schema** after making DDL changes to your database.
 
 1. Type your question and click **⚡ Generate SQL**.
 2. Review the generated SQL in the output panel.
-3. Click **▶ Execute SQL** to run it against your database.
+3. In MySQL Live mode, click **▶ Execute SQL** to run it against your database.
 4. Results appear in the **📊 Query Results** table below.
 
 ---
 
-## Step-by-Step Progress Indicator
+## Connecting to MongoDB — Two-Step Flow
+
+### Step 1 — Select MongoDB
+
+In the **Database type** radio at the top of the sidebar, select **MongoDB**.
+
+### Step 2 — Enter Connection Details
+
+MongoDB Step 1 shows a **Connection input mode** toggle with two options:
+
+#### Fields mode (default)
+
+| Field          | Example         | Notes                                                        |
+| -------------- | --------------- | ------------------------------------------------------------ |
+| Host           | `localhost`     | IP address or hostname of the MongoDB server                 |
+| Port           | `27017`         | Default MongoDB port                                         |
+| Username       | `readonly_user` | Leave blank for unauthenticated connections                  |
+| Password       | `••••••••`      | Stored only in session memory — never written to disk        |
+| Auth Source    | `admin`         | Database that holds the user credentials (typically `admin`) |
+| Auth Mechanism | `SCRAM-SHA-256` | Choose `None / No Auth` for unauthenticated servers          |
+
+#### URI + credentials mode
+
+Use this mode when you have a full MongoDB connection URI (e.g. from a cloud provider
+dashboard) and want to supply credentials separately.
+
+| Field       | Example                      | Notes                                                          |
+| ----------- | ---------------------------- | -------------------------------------------------------------- |
+| MongoDB URI | `mongodb://localhost:27017/` | Bare URI — **do not include credentials in the URI itself**    |
+| Username    | `readonly_user`              | Leave blank for unauthenticated connections                    |
+| Password    | `••••••••`                   | Injected into the URI before connecting; never written to disk |
+
+**Supported URI formats:**
+```
+mongodb://localhost:27017/
+mongodb://localhost:27017/?authSource=admin
+mongodb+srv://cluster0.mongodb.net/?authSource=admin&retryWrites=true
+```
+
+> **Important**: Do **not** embed credentials directly in the URI
+> (e.g. `mongodb://user:pass@host/`). The app will show a warning and block the
+> connection. Enter credentials in the Username and Password fields instead.
+
+> **SRV URIs** (`mongodb+srv://`): The app automatically omits `directConnection`
+> for SRV URIs, which is required for Atlas and replica-set connections that use
+> the SRV discovery scheme.
+
+### Step 3 — Connect
+
+Click **🔗 Connect**. The status indicator shows:
+- ✅ **Connected — N databases found** — server reachable
+- ❌ **Connection failed** — check credentials, host, and port
+
+### Step 4 — Select Database
+
+A dropdown appears with all non-system databases on the server (`admin`, `local`, and
+`config` are filtered out automatically). Choose a database and click **Select Database**.
+
+The schema viewer immediately shows all discovered collections and their sampled fields.
+
+### Step 5 — Generate MQL
+
+Type your question in plain English and click **⚡ Generate SQL**.
+
+The output panel will display a MongoDB-flavoured query (e.g., `db.collection.find(...)`
+or an aggregation pipeline). Because MongoDB uses MQL rather than SQL, the **Execute**
+button is hidden in MongoDB mode — copy the generated query and run it in your MongoDB
+client or shell.
+
+---
+
+## Generating SQL / MQL
 
 While SQL is being generated, you will see four steps:
 
@@ -143,6 +272,22 @@ While SQL is being generated, you will see four steps:
 - Click anywhere in the code block and use `Ctrl+A` / `Cmd+A` to select all, then copy.
 - Use the **🗑️ Clear** button to reset the output and start a new question.
 - In Live mode, the **📊 Query Results** dataframe supports sorting by clicking column headers.
+- After results appear, click **⬇ Download CSV** to save the result set as a UTF-8 CSV
+  file named `eng2sql_results_<YYYYMMDD>.csv` (US-086). If the result set is empty, the
+  button is shown as disabled with a "No results to export" label.
+
+---
+
+## Query History (Sprint 20)
+
+Every successful query is added to the **🕒 Query History** panel that appears below the
+input/output columns. The panel shows the last 10 queries (most-recent first).
+
+- Each entry shows the plain-English question and the generated SQL/MQL (truncated to 80
+  characters if longer).
+- Click **↩ Re-use** next to any entry to pre-populate the input box with that question.
+- History is **session-scoped** — it is cleared when you reload the page.
+
 
 ---
 
@@ -159,6 +304,12 @@ While SQL is being generated, you will see four steps:
 - Verify the username and password.
 - Ensure the MySQL user has `SELECT` privilege on the target database.
 - Check that the host allows connections from your IP (firewall / `GRANT` statement).
+
+### "⚠️ Remove credentials from the URI"
+
+This warning appears when you paste a URI that already contains `username:password@` in
+URI + credentials mode. Remove the credentials from the URI field and enter them in the
+separate Username and Password fields instead.
 
 ### "❌ Connection failed: Could not connect to server"
 
@@ -182,7 +333,10 @@ No. The app only generates and executes `SELECT` statements. Write operations ar
 No. Passwords are held only in Streamlit's in-memory session state and cleared when the browser tab closes. They are never written to disk or logs.
 
 **Q: Which SQL dialects are supported?**
-MySQL 8.0 is the primary target. SQLite is supported for testing. PostgreSQL support is on the roadmap.
+MySQL 8.0 is the primary SQL target. MongoDB MQL (aggregation pipeline / `find()`) is supported via the MongoDB mode. SQLite is used for testing. PostgreSQL support is on the roadmap.
+
+**Q: Can the tool execute MongoDB queries?**
+Not yet. The generated MongoDB MQL is displayed in the output panel for you to copy and run in your MongoDB client or shell. In-app MongoDB query execution is planned for a future sprint.
 
 **Q: Can I use my own schema YAML file?**
 Yes. Set the `STATIC_SCHEMA_PATH` environment variable to point to your custom YAML file.

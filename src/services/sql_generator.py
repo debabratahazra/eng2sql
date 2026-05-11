@@ -27,10 +27,36 @@ Rules:
 - Write read-only SELECT queries only; never INSERT, UPDATE, DELETE, or DROP.
 - Use proper SQL aliases for readability when joining tables.
 - If the question is ambiguous, make a reasonable assumption.
-
+{dialect_tips}
 Database Schema:
 {schema_context}
 """
+
+# EPIC-009 / US-047 — dialect-specific tips appended to the system prompt.
+_DIALECT_TIPS: dict[str, str] = {
+    "PostgreSQL": (
+        "\nPostgreSQL-specific tips:\n"
+        "- Use ILIKE for case-insensitive matching (not LIKE).\n"
+        "- Cast values with the :: operator (e.g. col::int), not CAST(... AS ...).\n"
+        "- Pagination uses LIMIT N OFFSET M.\n"
+        "- Quote identifiers with double quotes if they contain mixed case.\n"
+    ),
+    "MongoDB": (
+        "\nMongoDB-specific output rules (CRITICAL — follow exactly):\n"
+        "- Output ONLY a single JSON object — no explanation, no prose, no markdown fences.\n"
+        "- The JSON object must have exactly two keys:\n"
+        '  1. "collection": a string — the name of the MongoDB collection to query.\n'
+        '  2. "pipeline": an array of MongoDB aggregation stage objects.\n'
+        "- Example output:\n"
+        '  {"collection": "audit_logs", "pipeline": ['
+        '{"$match": {"action": "login"}}, {"$sort": {"ts": -1}}, {"$limit": 50}]}\n'
+        "- Always add {\"$limit\": 100} as the last stage unless the user asks for more rows.\n"
+        "- Use $match for filtering, $sort for ordering, $project for selecting fields,\n"
+        "  $group for aggregation/counting, $lookup for joins between collections.\n"
+        "- Do NOT output any text outside the JSON object.\n"
+        "- Do NOT use JavaScript syntax (no db.collection.find(...) shell expressions).\n"
+    ),
+}
 
 
 def _build_schema_context(schema: TableSchema) -> str:
@@ -128,6 +154,7 @@ class SQLGenerator:
         schema_context = _build_schema_context(schema)
         system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
             dialect=dialect,
+            dialect_tips=_DIALECT_TIPS.get(dialect, ""),
             schema_context=schema_context,
         )
 
