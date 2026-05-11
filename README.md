@@ -74,6 +74,13 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and add your OPENAI_API_KEY
 
+# Windows (PowerShell) — auto-activates .venv, opens browser
+.\scripts\run_app.ps1
+
+# WSL2 / Linux / macOS — auto-activates .venv, opens browser
+bash scripts/run_app.sh
+
+# Manual (any platform)
 streamlit run src/app.py
 ```
 

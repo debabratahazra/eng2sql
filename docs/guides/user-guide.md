@@ -39,10 +39,26 @@ Open **http://localhost:8501** in your browser.
 > **Docker image**: `ghcr.io/your-org/eng2sql:1.0.0` (or `latest` for the most recent build)
 > The cert bundle at `cert/ca-bundle.crt` is mounted automatically by `docker-compose.yml`.
 
-**Local Python**
+**Local Python — Windows (PowerShell)**
+```powershell
+pip install -r requirements.txt
+Copy-Item .env.example .env   # fill in OPENAI_API_KEY
+.\scripts\run_app.ps1         # default port 8501
+.\scripts\run_app.ps1 -Port 8502  # custom port
+```
+
+**Local Python — WSL2 / Linux / macOS**
 ```bash
 pip install -r requirements.txt
 cp .env.example .env          # fill in OPENAI_API_KEY
+bash scripts/run_app.sh       # default port 8501
+bash scripts/run_app.sh 8502  # custom port
+```
+
+Both scripts activate `.venv` automatically (if present), verify Python and Streamlit are on the PATH, and open the browser for you after a 3-second delay. They also print clear warnings if `.env` or `.venv` are missing.
+
+**Manual launch (any platform)**
+```bash
 streamlit run src/app.py
 ```
 

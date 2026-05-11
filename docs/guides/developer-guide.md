@@ -51,9 +51,17 @@ pre-commit install
 cp .env.example .env
 # Edit .env and set OPENAI_API_KEY
 
-# Run the app
+# Run the app (Windows — PowerShell launcher)
+.\scripts\run_app.ps1
+
+# Run the app (WSL2 / Linux / macOS launcher)
+bash scripts/run_app.sh
+
+# Run the app (manual, any platform)
 streamlit run src/app.py
 ```
+
+> **Launcher scripts** — both `scripts/run_app.ps1` (Windows) and `scripts/run_app.sh` (WSL2/Linux/macOS) auto-activate `.venv`, perform preflight checks, and open the browser automatically.
 
 ### Running Tests
 
